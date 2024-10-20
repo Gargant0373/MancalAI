@@ -1,0 +1,14 @@
+.flex {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.grid {
+    display: grid;
+    gap: 10px;
+}
+
+.text-center {
+    text-align: center;
+}
