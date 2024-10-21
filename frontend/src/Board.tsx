@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
 import styled from 'styled-components';
-import { Player } from './Player';
+import { Player, playerFromString } from './Player';
 
 const BoardWrapper = styled.div`
   display: flex;
@@ -86,7 +87,7 @@ const renderPieces = (count: number, moving: boolean) => {
     return pieces;
 };
 
-const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer: any, clickable: Player[] }) => {
+const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer: any, clickable: Player[], listenSockets: boolean }) => {
     const [board, setBoard] = useState({
         [Player.Player1]: {
             pits: [4, 4, 4, 4, 4, 4],
@@ -100,6 +101,25 @@ const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer:
 
     const [activePit, setActivePit] = useState<number | null>(null);
     const [movingPieces, setMovingPieces] = useState<number[]>([]);
+
+    useEffect(() => {
+        const socket = io('http://localhost:8080');
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('move', (data: { type: string, player: string, pitIndex: number }) => {
+            console.log('Move data:', data);
+            if (data.type === 'move') {
+                movePieces(playerFromString(data.player), data.pitIndex);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [props.listenSockets]);
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

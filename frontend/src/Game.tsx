@@ -29,7 +29,7 @@ const Game = () => {
                 <Row>Current player: {currentPlayer}</Row>
             )}
         </GameInformation>
-        <Board setWinner={setWinner} currentPlayer={currentPlayer} setCurrentPlayer={setCurrentPlayer} clickable={[Player.Player1, Player.Player2]} />
+        <Board setWinner={setWinner} currentPlayer={currentPlayer} setCurrentPlayer={setCurrentPlayer} clickable={[Player.Player1, Player.Player2]} listenSockets={true} />
     </>;
 }
 
