@@ -1,12 +1,11 @@
 import React from 'react';
-import Board from './Board';
+import Game from './Game';
 import './styles/utility.css';
 
 const App: React.FC = () => {
     return (
         <div>
-            <h1>Mancala Game</h1>
-            <Board />
+            <Game />
         </div>
     );
 }

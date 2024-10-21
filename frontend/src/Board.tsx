@@ -1,10 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import styled from 'styled-components';
-
-enum Player {
-    Player1 = 'player1',
-    Player2 = 'player2',
-}
+import { Player } from './Player';
 
 const BoardWrapper = styled.div`
   display: flex;
@@ -65,10 +61,17 @@ const Piece = styled.div<{ moving: number }>`
 
 const renderPieces = (count: number, moving: boolean) => {
     const pieces = [];
+    const radius = 20;
+    const layerLimit = 10;
+    const layerGap = 12;
+
     for (let i = 0; i < count; i++) {
-        const angle = (i / count) * 360;
-        const x = 25 * Math.cos((angle * Math.PI) / 180);
-        const y = 25 * Math.sin((angle * Math.PI) / 180);
+        const layer = Math.floor(i / layerLimit);
+        const layerRadius = radius + layer * layerGap;
+        const angle = (i % layerLimit) / layerLimit * 360;
+        const x = layerRadius * Math.cos((angle * Math.PI) / 180);
+        const y = layerRadius * Math.sin((angle * Math.PI) / 180);
+
         pieces.push(
             <Piece
                 key={i}
@@ -79,10 +82,11 @@ const renderPieces = (count: number, moving: boolean) => {
             />
         );
     }
+
     return pieces;
 };
 
-const Board: React.FC = () => {
+const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer: any, clickable: Player[] }) => {
     const [board, setBoard] = useState({
         [Player.Player1]: {
             pits: [4, 4, 4, 4, 4, 4],
@@ -99,8 +103,13 @@ const Board: React.FC = () => {
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+    const getOppositePlayer = (player: Player) => (player === Player.Player1 ? Player.Player2 : Player.Player1);
+
     const movePieces = async (player: Player, pitIndex: number) => {
         if (activePit !== null) return;
+        if (!props.clickable.includes(player)) return;
+        if (board[player].pits[pitIndex] === 0) return;
+        if (player !== props.currentPlayer) return;
 
         setMovingPieces([pitIndex + (player === Player.Player1 ? 0 : 6)]);
 
@@ -118,13 +127,15 @@ const Board: React.FC = () => {
             if (pitIndex === 6) {
                 pitIndex = -1;
                 if (currentPitOwner === player) {
-                    currentPitOwner = player === Player.Player1 ? Player.Player2 : Player.Player1;
                     newBoard[currentPitOwner].store = newBoard[currentPitOwner].store + 1;
+                    currentPitOwner = getOppositePlayer(player);
+
                     setMovingPieces(prev => {
                         const updated = [...prev, currentPitOwner === Player.Player1 ? -2 : -1];
                         return updated;
                     });
                     pieces--;
+
                     await sleep(1000);
                     continue;
                 } else {
@@ -141,53 +152,83 @@ const Board: React.FC = () => {
             });
 
             setBoard(newBoard);
-            await sleep(1000);
+            await sleep(500);
 
             pieces--;
         }
 
+        // Check if last piece landed in an empty pit
+        if (currentPitOwner === player && newBoard[currentPitOwner].pits[pitIndex] === 1) {
+            const oppositePitIndex = 5 - pitIndex;
+            const oppositePitCount = newBoard[getOppositePlayer(player)].pits[oppositePitIndex];
+            if (oppositePitCount > 0) {
+                newBoard[currentPitOwner].store = newBoard[currentPitOwner].store + oppositePitCount + 1;
+                newBoard[currentPitOwner].pits[pitIndex] = 0;
+                newBoard[getOppositePlayer(player)].pits[oppositePitIndex] = 0;
+            }
+        }
+
+        // Check if the game is over
+        if (newBoard[Player.Player1].pits.every(count => count === 0) || newBoard[Player.Player2].pits.every(count => count === 0)) {
+            newBoard[Player.Player1].store = newBoard[Player.Player1].store + newBoard[Player.Player1].pits.reduce((a, b) => a + b, 0);
+            newBoard[Player.Player2].store = newBoard[Player.Player2].store + newBoard[Player.Player2].pits.reduce((a, b) => a + b, 0);
+            newBoard[Player.Player1].pits = [0, 0, 0, 0, 0, 0];
+            newBoard[Player.Player2].pits = [0, 0, 0, 0, 0, 0];
+
+            props.setWinner(newBoard[Player.Player1].store > newBoard[Player.Player2].store ? Player.Player1 : Player.Player2);
+        }
+
         setBoard(newBoard);
         setActivePit(null);
+        props.setCurrentPlayer(getOppositePlayer(player));
     };
 
     return (
-        <BoardWrapper>
-            <Row>
-                {/* Player 1 Store */}
-                <Store color="#e8675d">
-                    {board[Player.Player1].store}
-                    {renderPieces(board[Player.Player1].store, movingPieces.includes(-1))}
-                </Store>
-                <Column>
-                    <Row>
-                        {/* Reverse order for Player 2 */}
-                        {board[Player.Player2].pits.slice().reverse().map((count, idx) => (
-                            <Pit key={`player2-pit-${idx}`} color={'#f58c84'}>
-                                {11 - idx}
-                                {renderPieces(count, movingPieces.includes(11 - idx))}
-                            </Pit>
-                        ))}
-                    </Row>
-                    <Row>
-                        {board[Player.Player1].pits.map((count, idx) => (
-                            <Pit
-                                key={`player1-pit-${idx}`}
-                                color={'#848af5'}
-                                onClick={() => movePieces(Player.Player1, idx)}
-                            >
-                                {idx}
-                                {renderPieces(count, movingPieces.includes(idx))}
-                            </Pit>
-                        ))}
-                    </Row>
-                </Column>
-                {/* Player 2 Store */}
-                <Store color="#575ede">
-                    {board[Player.Player2].store}
-                    {renderPieces(board[Player.Player2].store, movingPieces.includes(-1))}
-                </Store>
-            </Row>
-        </BoardWrapper>
+        <>
+            <BoardWrapper>
+                <Row>
+                    {/* Player 2 Store */}
+                    <Store color="#e8675d">
+                        {board[Player.Player2].store}
+                        {renderPieces(board[Player.Player2].store, movingPieces.includes(-2))}
+                    </Store>
+                    <Column>
+                        <Row>
+                            {/* Reverse order for Player 2 */}
+                            {board[Player.Player2].pits.slice().reverse().map((count, idx) => (
+                                <Pit
+                                    key={`player2-pit-${idx}`}
+                                    color={'#f58c84'}
+                                    onClick={() => movePieces(Player.Player2, 5 - idx)}
+                                >
+                                    {11 - idx}
+                                    {count}
+                                    {renderPieces(count, movingPieces.includes(11 - idx))}
+                                </Pit>
+                            ))}
+                        </Row>
+                        <Row>
+                            {board[Player.Player1].pits.map((count, idx) => (
+                                <Pit
+                                    key={`player1-pit-${idx}`}
+                                    color={'#848af5'}
+                                    onClick={() => movePieces(Player.Player1, idx)}
+                                >
+                                    {idx}
+                                    {count}
+                                    {renderPieces(count, movingPieces.includes(idx))}
+                                </Pit>
+                            ))}
+                        </Row>
+                    </Column>
+                    {/* Player 1 Store */}
+                    <Store color="#575ede">
+                        {board[Player.Player1].store}
+                        {renderPieces(board[Player.Player1].store, movingPieces.includes(-1))}
+                    </Store>
+                </Row>
+            </BoardWrapper>
+        </>
     );
 };
 
