@@ -4,5 +4,5 @@ export enum Player {
 }
 
 export function playerFromString(str: string): Player {
-    return str === 'player1' ? Player.Player1 : Player.Player2;
+    return str.toLowerCase() === 'player1' ? Player.Player1 : Player.Player2;
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Player } from "./Player";
 import styled from "styled-components";
 import Board from "./Board";
+import { Player } from "./Player";
 
 const GameInformation = styled.div`
     display: flex;
@@ -29,7 +29,7 @@ const Game = () => {
                 <Row>Current player: {currentPlayer}</Row>
             )}
         </GameInformation>
-        <Board setWinner={setWinner} currentPlayer={currentPlayer} setCurrentPlayer={setCurrentPlayer} clickable={[Player.Player1, Player.Player2]} listenSockets={true} />
+        <Board setWinner={setWinner} currentPlayer={currentPlayer} setCurrentPlayer={setCurrentPlayer} clickable={[]} listenSockets={true} />
     </>;
 }
 

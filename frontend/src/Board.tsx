@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
 import styled from 'styled-components';
-import { Player, playerFromString } from './Player';
+import { Player } from './Player';
+import useCommunication from './hooks/useCommunication';
+import { BoardState } from './Types';
 
 const BoardWrapper = styled.div`
   display: flex;
@@ -87,39 +88,30 @@ const renderPieces = (count: number, moving: boolean) => {
     return pieces;
 };
 
-const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer: any, clickable: Player[], listenSockets: boolean }) => {
-    const [board, setBoard] = useState({
+interface BoardProps {
+    setWinner: (winner: Player) => void;
+    currentPlayer: Player;
+    setCurrentPlayer: (player: Player) => void;
+    clickable: Player[];
+    listenSockets: boolean;
+}
+
+const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSockets }: BoardProps) => {
+    const getInitialBoard = (): BoardState => ({
         [Player.Player1]: {
-            pits: [4, 4, 4, 4, 4, 4],
             store: 0,
+            pits: [4, 4, 4, 4, 4, 4],
         },
         [Player.Player2]: {
-            pits: [4, 4, 4, 4, 4, 4],
             store: 0,
+            pits: [4, 4, 4, 4, 4, 4],
         },
     });
 
+    const [board, setBoard] = useState<BoardState>(getInitialBoard());
+
     const [activePit, setActivePit] = useState<number | null>(null);
     const [movingPieces, setMovingPieces] = useState<number[]>([]);
-
-    useEffect(() => {
-        const socket = io('http://localhost:8080');
-
-        socket.on('connect', () => {
-            console.log('Connected to server');
-        });
-
-        socket.on('move', (data: { type: string, player: string, pitIndex: number }) => {
-            console.log('Move data:', data);
-            if (data.type === 'move') {
-                movePieces(playerFromString(data.player), data.pitIndex);
-            }
-        });
-
-        return () => {
-            socket.disconnect();
-        };
-    }, [props.listenSockets]);
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -127,9 +119,7 @@ const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer:
 
     const movePieces = async (player: Player, pitIndex: number) => {
         if (activePit !== null) return;
-        if (!props.clickable.includes(player)) return;
         if (board[player].pits[pitIndex] === 0) return;
-        if (player !== props.currentPlayer) return;
 
         setMovingPieces([pitIndex + (player === Player.Player1 ? 0 : 6)]);
 
@@ -177,78 +167,106 @@ const Board = (props: { setWinner: any, currentPlayer: Player, setCurrentPlayer:
             pieces--;
         }
 
-        // Check if last piece landed in an empty pit
-        if (currentPitOwner === player && newBoard[currentPitOwner].pits[pitIndex] === 1) {
-            const oppositePitIndex = 5 - pitIndex;
-            const oppositePitCount = newBoard[getOppositePlayer(player)].pits[oppositePitIndex];
-            if (oppositePitCount > 0) {
-                newBoard[currentPitOwner].store = newBoard[currentPitOwner].store + oppositePitCount + 1;
-                newBoard[currentPitOwner].pits[pitIndex] = 0;
-                newBoard[getOppositePlayer(player)].pits[oppositePitIndex] = 0;
-            }
-        }
+        newBoard = checkPieceInEmptyPit(player, currentPitOwner, pitIndex, newBoard) || newBoard;
 
-        // Check if the game is over
-        if (newBoard[Player.Player1].pits.every(count => count === 0) || newBoard[Player.Player2].pits.every(count => count === 0)) {
-            newBoard[Player.Player1].store = newBoard[Player.Player1].store + newBoard[Player.Player1].pits.reduce((a, b) => a + b, 0);
-            newBoard[Player.Player2].store = newBoard[Player.Player2].store + newBoard[Player.Player2].pits.reduce((a, b) => a + b, 0);
-            newBoard[Player.Player1].pits = [0, 0, 0, 0, 0, 0];
-            newBoard[Player.Player2].pits = [0, 0, 0, 0, 0, 0];
-
-            props.setWinner(newBoard[Player.Player1].store > newBoard[Player.Player2].store ? Player.Player1 : Player.Player2);
-        }
+        newBoard = checkGameOverBoard(player, newBoard) || newBoard;
 
         setBoard(newBoard);
         setActivePit(null);
-        props.setCurrentPlayer(getOppositePlayer(player));
+
+        setCurrentPlayer(getOppositePlayer(player));
     };
 
+    const checkPieceInEmptyPit = (player: Player, currentPitOwner: Player, pitIndex: number, board: BoardState) => {
+        const isInEmptyPit = currentPitOwner === player && board[currentPitOwner].pits[pitIndex] === 1;
+        if (!isInEmptyPit) return;
+
+        const oppositePitIndex = 5 - pitIndex;
+        const oppositePitCount = board[getOppositePlayer(player)].pits[oppositePitIndex];
+
+        if (oppositePitCount > 0) {
+            board[player].store = board[player].store + oppositePitCount + 1;
+            board[player].pits[pitIndex] = 0;
+            board[getOppositePlayer(player)].pits[oppositePitIndex] = 0;
+        }
+
+        return board;
+    }
+
+    const checkGameOverBoard = (player: Player, board: BoardState) => {
+        const isGameOver = board[player].pits.every(count => count === 0);
+        if (!isGameOver) return;
+
+        // Collect remaining pieces
+        const remainingPieces = board[player].pits.reduce((a, b) => a + b, 0);
+        board[player].store = board[player].store + remainingPieces;
+        board[player].pits = [0, 0, 0, 0, 0, 0];
+
+        const oppositePlayer = getOppositePlayer(player);
+        const remainingPieces2 = board[oppositePlayer].pits.reduce((a, b) => a + b, 0);
+        board[oppositePlayer].store = board[oppositePlayer].store + remainingPieces2;
+        board[oppositePlayer].pits = [0, 0, 0, 0, 0, 0];
+
+        const winner = board[player].store > board[oppositePlayer].store ? player : oppositePlayer;
+        setWinner(winner);
+
+        return board;
+    }
+
+    const { serverMove } = useCommunication({ board, movePieces, listenSockets });
+
+    useEffect(() => {
+        console.log('currentPlayer:', currentPlayer);
+        if (listenSockets && !clickable.includes(currentPlayer)) {
+            console.log('serverMove:', currentPlayer);
+            serverMove(currentPlayer);
+        }
+    }, [currentPlayer])
+
     return (
-        <>
-            <BoardWrapper>
-                <Row>
-                    {/* Player 2 Store */}
-                    <Store color="#e8675d">
-                        {board[Player.Player2].store}
-                        {renderPieces(board[Player.Player2].store, movingPieces.includes(-2))}
-                    </Store>
-                    <Column>
-                        <Row>
-                            {/* Reverse order for Player 2 */}
-                            {board[Player.Player2].pits.slice().reverse().map((count, idx) => (
-                                <Pit
-                                    key={`player2-pit-${idx}`}
-                                    color={'#f58c84'}
-                                    onClick={() => movePieces(Player.Player2, 5 - idx)}
-                                >
-                                    {11 - idx}
-                                    {count}
-                                    {renderPieces(count, movingPieces.includes(11 - idx))}
-                                </Pit>
-                            ))}
-                        </Row>
-                        <Row>
-                            {board[Player.Player1].pits.map((count, idx) => (
-                                <Pit
-                                    key={`player1-pit-${idx}`}
-                                    color={'#848af5'}
-                                    onClick={() => movePieces(Player.Player1, idx)}
-                                >
-                                    {idx}
-                                    {count}
-                                    {renderPieces(count, movingPieces.includes(idx))}
-                                </Pit>
-                            ))}
-                        </Row>
-                    </Column>
-                    {/* Player 1 Store */}
-                    <Store color="#575ede">
-                        {board[Player.Player1].store}
-                        {renderPieces(board[Player.Player1].store, movingPieces.includes(-1))}
-                    </Store>
-                </Row>
-            </BoardWrapper>
-        </>
+        <BoardWrapper>
+            <Row>
+                {/* Player 2 Store */}
+                <Store color="#e8675d">
+                    {board[Player.Player2].store}
+                    {renderPieces(board[Player.Player2].store, movingPieces.includes(-2))}
+                </Store>
+                <Column>
+                    <Row>
+                        {/* Reverse order for Player 2 */}
+                        {board[Player.Player2].pits.slice().reverse().map((count, idx) => (
+                            <Pit
+                                key={`player2-pit-${idx}`}
+                                color={'#f58c84'}
+                                onClick={() => movePieces(Player.Player2, 5 - idx)}
+                            >
+                                {11 - idx}
+                                {count}
+                                {renderPieces(count, movingPieces.includes(11 - idx))}
+                            </Pit>
+                        ))}
+                    </Row>
+                    <Row>
+                        {board[Player.Player1].pits.map((count, idx) => (
+                            <Pit
+                                key={`player1-pit-${idx}`}
+                                color={'#848af5'}
+                                onClick={() => movePieces(Player.Player1, idx)}
+                            >
+                                {idx}
+                                {count}
+                                {renderPieces(count, movingPieces.includes(idx))}
+                            </Pit>
+                        ))}
+                    </Row>
+                </Column>
+                {/* Player 1 Store */}
+                <Store color="#575ede">
+                    {board[Player.Player1].store}
+                    {renderPieces(board[Player.Player1].store, movingPieces.includes(-1))}
+                </Store>
+            </Row>
+        </BoardWrapper>
     );
 };
 
