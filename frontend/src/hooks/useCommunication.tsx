@@ -44,7 +44,6 @@ const useCommunication = ({ board, movePieces, listenSockets }: UseCommunication
     const serverMove = (player: Player) => {
         console.log('Server move:', player);
         if (socket) {
-            console.log('Server move2 :', player);
             boardState(socket);
             socket.emit('player_turn', {
                 player: player,

@@ -132,10 +132,11 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
         let currentPitOwner = player;
         newBoard[player].pits[pitIndex] = 0;
 
+        let lastPitIndex = pitIndex;
         while (pieces > 0) {
-            pitIndex = (pitIndex + 1);
-            if (pitIndex === 6) {
-                pitIndex = -1;
+            lastPitIndex = (lastPitIndex + 1);
+            if (lastPitIndex === 6) {
+                lastPitIndex = -1;
                 if (currentPitOwner === player) {
                     newBoard[currentPitOwner].store = newBoard[currentPitOwner].store + 1;
                     currentPitOwner = getOppositePlayer(player);
@@ -147,6 +148,14 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
                     pieces--;
 
                     await sleep(1000);
+                    if (pieces === 0) {
+                        // Check if the last stone landed in the player's store for an extra turn
+                        setActivePit(null);
+                        setBoard(newBoard);
+
+                        serverMove(player);
+                        return;
+                    }
                     continue;
                 } else {
                     currentPitOwner = player;
@@ -154,10 +163,10 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
                 }
             }
 
-            newBoard[currentPitOwner].pits[pitIndex] = newBoard[currentPitOwner].pits[pitIndex] + 1;
+            newBoard[currentPitOwner].pits[lastPitIndex] = newBoard[currentPitOwner].pits[lastPitIndex] + 1;
 
             setMovingPieces(prev => {
-                const updated = [...prev, currentPitOwner === Player.Player1 ? pitIndex : pitIndex + 6];
+                const updated = [...prev, currentPitOwner === Player.Player1 ? lastPitIndex : lastPitIndex + 6];
                 return updated;
             });
 
@@ -167,14 +176,17 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
             pieces--;
         }
 
-        newBoard = checkPieceInEmptyPit(player, currentPitOwner, pitIndex, newBoard) || newBoard;
+        newBoard = checkPieceInEmptyPit(player, currentPitOwner, lastPitIndex, newBoard) || newBoard;
 
         newBoard = checkGameOverBoard(player, newBoard) || newBoard;
 
         setBoard(newBoard);
         setActivePit(null);
 
-        setCurrentPlayer(getOppositePlayer(player));
+        // If the last piece did not land in the player's store, switch the turn
+        if (lastPitIndex !== -1 || currentPitOwner !== player) {
+            setCurrentPlayer(getOppositePlayer(player));
+        }
     };
 
     const checkPieceInEmptyPit = (player: Player, currentPitOwner: Player, pitIndex: number, board: BoardState) => {
