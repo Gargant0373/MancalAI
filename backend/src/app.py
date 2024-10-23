@@ -6,9 +6,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Dictionary to store board states for each client
-board_states = {}
-
 @app.route('/')
 def index():
     return "WebSocket Server is running!"
@@ -21,47 +18,26 @@ def handle_connect():
 def handle_disconnect():
     session_id = request.sid
     print(f'Client {session_id} disconnected')
-    
-    # Remove the board state for the disconnected client
-    if session_id in board_states:
-        del board_states[session_id]
 
 @socketio.on('move')
 def handle_move(data):
     print(f"Received move from client: {data}")
     emit('move', data, broadcast=True)
 
-@socketio.on('board_state')
-def handle_board_state(data):
-    session_id = request.sid
-    
-    board = data.get('board')
-    if not board:
-        return
-     
-    # Reverse the board indexes for the opponent
-    player2 = board.get('player2')
-    
-    if player2 and player2.get('pits'):
-        player2.get('pits').reverse()
-    
-    # Save the received board state
-    board_states[session_id] = board
-    
-    print(f"Received board state from client {session_id}: {data}")
-
 @socketio.on('player_turn')
 def handle_server_move(data):
     session_id = request.sid
     print(f"Received server move from client {session_id}: {data}")
     
-    # Retrieve the board state for the client
-    board = board_states.get(session_id)
+    board = data.get('board')
+    player2 = board.get('player2')
+    if player2 and player2.get('pits'):
+        player2.get('pits').reverse()
+        
     if board:
-        player = data['player']
+        player = data.get('player')
         pitIndex = next_best_move(player, board)
-        print(f"Server move: {pitIndex}")
-        # Emit a move event with a dummy pitIndex (as an example)
+        print(f"Server move: {pitIndex} with {board.get(player).get('pits')[pitIndex]} stones")
         emit('move', {'player': player, 'pitIndex': pitIndex}, broadcast=True)
 
 if __name__ == '__main__':

@@ -113,6 +113,8 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
     const [activePit, setActivePit] = useState<number | null>(null);
     const [movingPieces, setMovingPieces] = useState<number[]>([]);
 
+    const [sendServerMove, setSendServerMove] = useState(false);
+
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     const getOppositePlayer = (player: Player) => (player === Player.Player1 ? Player.Player2 : Player.Player1);
@@ -152,8 +154,7 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
                         // Check if the last stone landed in the player's store for an extra turn
                         setActivePit(null);
                         setBoard(newBoard);
-
-                        serverMove(player);
+                        setSendServerMove(true);
                         return;
                     }
                     continue;
@@ -231,9 +232,16 @@ const Board = ({ setWinner, currentPlayer, setCurrentPlayer, clickable, listenSo
         console.log('currentPlayer:', currentPlayer);
         if (listenSockets && !clickable.includes(currentPlayer)) {
             console.log('serverMove:', currentPlayer);
-            serverMove(currentPlayer);
+            serverMove(currentPlayer, board);
         }
     }, [currentPlayer])
+
+    useEffect(() => {
+        if (sendServerMove) {
+            setSendServerMove(false);
+            serverMove(currentPlayer, board);
+        }
+    }, [sendServerMove]);
 
     return (
         <BoardWrapper>

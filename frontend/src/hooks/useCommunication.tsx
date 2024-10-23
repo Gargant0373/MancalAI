@@ -11,6 +11,20 @@ interface UseCommunicationProps {
 
 const useCommunication = ({ board, movePieces, listenSockets }: UseCommunicationProps) => {
     const [socket, setSocket] = useState<Socket | null>(null);
+    const [socketInitialized, setSocketInitialized] = useState(false);
+
+    const waitForSocketInitialization = () => {
+        return new Promise<void>((resolve) => {
+            const checkSocket = () => {
+                if (socketInitialized) {
+                    resolve();
+                } else {
+                    setTimeout(checkSocket, 50); 
+                }
+            };
+            checkSocket();
+        });
+    };
 
     useEffect(() => {
         if (!listenSockets) return;
@@ -19,9 +33,8 @@ const useCommunication = ({ board, movePieces, listenSockets }: UseCommunication
         setSocket(newSocket);
 
         newSocket.on('connect', () => {
-            console.log('Connected to server');
-
             boardState(newSocket);
+            setSocketInitialized(true);
         });
 
         newSocket.on('move', async (data: { type: string, player: string, pitIndex: number }) => {
@@ -30,8 +43,8 @@ const useCommunication = ({ board, movePieces, listenSockets }: UseCommunication
         });
 
         return () => {
-            console.log('Disconnecting socket');
             newSocket.disconnect();
+            setSocketInitialized(false);
         };
     }, [listenSockets]);
 
@@ -41,14 +54,13 @@ const useCommunication = ({ board, movePieces, listenSockets }: UseCommunication
         });
     };
 
-    const serverMove = (player: Player) => {
-        console.log('Server move:', player);
-        if (socket) {
-            boardState(socket);
-            socket.emit('player_turn', {
-                player: player,
-            });
-        }
+    const serverMove = async (player: Player, board: BoardState) => {
+        await waitForSocketInitialization();
+
+        socket?.emit('player_turn', {
+            board: board,
+            player: player,
+        });
     };
 
     return { serverMove };
